@@ -1,0 +1,24 @@
+[project]
+name = "python-llsp"
+version = "0.0.1"  # changed by semantic-release
+license = "GPLv3"
+description = ""
+authors = [
+    {name = "Luã Bida Vacaro",email = "luabidaa@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+
+[tool.poetry]
+packages = [ { include = "pyllsp", from = "." } ]
+
+[tool.poetry.dependencies]
+pygls = ">=2.0.0a1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+pytest-cov = "^6.1.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
