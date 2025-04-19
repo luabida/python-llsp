@@ -37,6 +37,12 @@ jobs:
         run: |
           poetry run pytest --cov=. --cov-report=xml
 
+      - name: Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          # token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+
       - name: coverage report
         uses: actions/upload-artifact@v4
         with:
