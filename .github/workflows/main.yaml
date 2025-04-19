@@ -33,12 +33,12 @@ jobs:
       - name: install project
         run: poetry install
 
-      - name: pytest + coverage
+      - name: pytest + coverage report
         run: |
-          poetry run pytest --cov=. --cov-report=xml
+          poetry run pytest --cov --cov-branch --cov-report=xml
 
-      - name: coverage report
-        uses: actions/upload-artifact@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          name: coverage-report-${{ matrix.python_version }}
-          path: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
