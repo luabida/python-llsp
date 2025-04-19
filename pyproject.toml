@@ -1,6 +1,6 @@
 [project]
 name = "python-llsp"
-version = "1.0.0"  # changed by semantic-release
+version = "1.0.1"  # changed by semantic-release
 license = "GPLv3"
 description = ""
 authors = [

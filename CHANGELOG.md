@@ -1,6 +1,12 @@
 Release Notes
 ---
 
+## [1.0.1](https://github.com/luabida/python-llsp/compare/1.0.0...1.0.1) (2025-04-19)
+
+### Bug Fixes
+
+* **release:** bump version to 1.0.1 ([93c321b](https://github.com/luabida/python-llsp/commit/93c321bde2c8feee9f038d492d37763e22671e79))
+
 ## 1.0.0 (2025-04-19)
 
 ### Bug Fixes
