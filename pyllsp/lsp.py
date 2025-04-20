@@ -7,6 +7,11 @@ from pygls.lsp.server import LanguageServer
 
 server = LanguageServer("pyllsp", __version__)
 
+
+def start() -> None:
+    server.start_io()
+
+
 @server.feature(lsp.TEXT_DOCUMENT_HOVER)
 def hover(params: lsp.HoverParams) -> lsp.Hover:
     document = server.workspace.get_text_document(params.text_document.uri)
@@ -165,6 +170,3 @@ def show_message_request(server: LanguageServer, params: lsp.ShowMessageRequestP
 @server.feature(lsp.WINDOW_LOG_MESSAGE)
 def log_message(server: LanguageServer, params: lsp.LogMessageParams):
     server.window_show_message(lsp.LogMessageParams(message="log message", type=lsp.MessageType.Info))
-
-
-server.start_io()
