@@ -14,10 +14,15 @@ packages = [ { include = "pyllsp", from = "." } ]
 
 [tool.poetry.dependencies]
 pygls = ">=2.0.0a1"
+importlib-metadata = "^8.6.1"
+jedi = "^0.19.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 pytest-cov = "^6.1.1"
+
+[tool.poetry.scripts]
+pyllsp = "pyllsp.lsp:start"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

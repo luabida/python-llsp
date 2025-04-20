@@ -1,3 +1,6 @@
+from importlib import metadata as importlib_metadata
+
+
 def get_version() -> str:
     try:
         return importlib_metadata.version(__name__)
