@@ -1,4 +1,5 @@
 from pyllsp import __version__
+from pathlib import Path
 
 import jedi
 from lsprotocol import types as lsp
@@ -14,15 +15,63 @@ def start() -> None:
 
 @server.feature(lsp.TEXT_DOCUMENT_HOVER)
 def hover(params: lsp.HoverParams) -> lsp.Hover:
-    document = server.workspace.get_text_document(params.text_document.uri)
-    line = document.lines[params.position.line].strip()
+    """
+    `a`
+    """
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    code = doc.source
+    line = doc.lines[params.position.line].strip()
+    script = jedi.Script(code, path=doc.path)
+    definitions = script.goto(
+        line=params.position.line + 1,
+        column=params.position.character,
+        follow_imports=True
+    )
 
+    if definitions:
+        definition = definitions[0]
+        name = definition.name
+        type = definition.type
+        module_name = definition.module_name
+        docstring = definition.docstring(raw=True)
+        full_name = definition.full_name
+        server.window_show_message(
+            lsp.LogMessageParams(
+                message=f"{server.workspace}",
+                type=lsp.MessageType.Info,
+            )
+        )
+
+        return
+        return lsp.Hover(
+            contents=[
+                lsp.MarkedString(language="python", value=code_content),
+                lsp.MarkedString(value=docstring_content)
+            ]
+        )
+
+    content = (
+        "   ▐▀▄       ▄▀▌   ▄▄▄▄▄▄▄             \n"
+        "   ▌▒▒▀▄▄▄▄▄▀▒▒▐▄▀▀▒██▒██▒▀▀▄          \n"
+        "  ▐▒▒▒▒▀▒▀▒▀▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▀▄        \n"
+        "  ▌▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▄▒▒▒▒▒▒▒▒▒▒▒▒▀▄      \n"
+        "▀█▒▒▒█▌▒▒█▒▒▐█▒▒▒▀▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌     \n"
+        "▀▌▒▒▒▒▒▒▀▒▀▒▒▒▒▒▒▀▀▒▒▒▒▒▒▒▒▒▒▒▒▒▒▐   ▄▄\n"
+        "▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌▄█▒█\n"
+        "▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒█▒█▀ \n"
+        "▐▒▒▒▒▒▒▒▒▒▒▒▒▒NOTHING▒▒▒▒▒▒▒▒▒▒▒▒▒█▀   \n"
+        "▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌    \n"
+        " ▌▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▐     \n"
+        " ▐▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▌     \n"
+        "  ▌▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▐      \n"
+        "  ▐▄▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▄▌      \n"
+        "    ▀▄▄▀▀▀▀▀▄▄▀▀▀▀▀▀▀▄▄▀▀▀▀▀▄▄▀        \n"
+    )
     return lsp.Hover(
         contents=lsp.MarkupContent(
             kind=lsp.MarkupKind.PlainText,
-            value=line
-        ),
-        range=None
+            value=content
+        )
     )
 
 
@@ -109,7 +158,9 @@ def code_action(server: LanguageServer, params: lsp.CodeActionParams):
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
 def did_open(server: LanguageServer, params: lsp.DidOpenTextDocumentParams):
-    server.window_show_message(lsp.LogMessageParams(message="did open", type=lsp.MessageType.Info))
+    project = jedi.get_default_project()
+    server.window_show_message(lsp.LogMessageParams(message=f"{project}", type=lsp.MessageType.Info))
+
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
@@ -140,6 +191,11 @@ def code_lens(server: LanguageServer, params: lsp.CodeLensParams):
 @server.feature(lsp.TEXT_DOCUMENT_INLAY_HINT)
 def inlay_hint(server: LanguageServer, params: lsp.InlayHintParams):
     server.window_show_message(lsp.LogMessageParams(message="inlay hint", type=lsp.MessageType.Info))
+
+
+@server.feature(types.INLAY_HINT_RESOLVE)
+def inlay_hint_resolve(hint: types.InlayHint):
+    server.window_show_message(lsp.LogMessageParams(message="inlay hint resolve", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WORKSPACE_SYMBOL)
