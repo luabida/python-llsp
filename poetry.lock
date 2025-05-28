@@ -273,14 +273,14 @@ testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
 name = "pygls"
-version = "2.0.0a2"
+version = "2.0.0a3"
 description = "A pythonic generic language server (pronounced like 'pie glass')"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pygls-2.0.0a2-py3-none-any.whl", hash = "sha256:b202369321409343aa6440d73111d9fa0c22e580466ff1c7696b8358bb91f243"},
-    {file = "pygls-2.0.0a2.tar.gz", hash = "sha256:03e00634ed8d989918268aaa4b4a0c3ab857ea2d4ee94514a52efa5ddd6d5d9f"},
+    {file = "pygls-2.0.0a3-py3-none-any.whl", hash = "sha256:fa366966681057e2decaca971ed0e31edf1cb725d26d2bc9ae24b159a1f142a7"},
+    {file = "pygls-2.0.0a3.tar.gz", hash = "sha256:1f3a3d309f9733f0ba4e1bb1aa8552d6d9016356f629badbd58fccf13b0c632b"},
 ]
 
 [package.dependencies]
@@ -411,4 +411,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<3.13"
-content-hash = "da36d176e5249f90c911bbacdc271a7270dbaf39c7b2e908fa5a2e99ca59cd7c"
+content-hash = "cb9bcc412843dd1f550a7fb36dff557e5e1b3509a6e3a2d488c7d352ec2853d6"
