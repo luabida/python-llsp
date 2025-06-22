@@ -2,11 +2,16 @@ from pyllsp import __version__
 from pathlib import Path
 
 import jedi
+import trio
+import asyncio
 from lsprotocol import types as lsp
 
-from pygls.lsp.server import LanguageServer
+from .server import PyLLSPServer, Notifier
+from . import diagnosis, actions
 
-server = LanguageServer("pyllsp", __version__)
+
+server = PyLLSPServer()
+notifier = Notifier(server)
 
 
 def start() -> None:
@@ -14,7 +19,7 @@ def start() -> None:
 
 
 @server.feature(lsp.TEXT_DOCUMENT_HOVER)
-def hover(params: lsp.HoverParams) -> lsp.Hover:
+async def hover(params: lsp.HoverParams) -> lsp.Hover:
     """
     `a`
     """
@@ -75,18 +80,67 @@ def hover(params: lsp.HoverParams) -> lsp.Hover:
     )
 
 
-@server.feature(lsp.TEXT_DOCUMENT_COMPLETION)
-def completions(server: LanguageServer, params: lsp.CompletionParams):
-    server.window_show_message(
-        lsp.LogMessageParams(
-            message="completions",
-            type=lsp.MessageType.Info,
-        )
+@server.feature(
+    lsp.TEXT_DOCUMENT_COMPLETION,
+    lsp.CompletionOptions(trigger_characters=[".", "{"])
+)
+async def completions(server: PyLLSPServer, params: lsp.CompletionParams):
+    COMPLETION_TYPE = {
+        "module": lsp.CompletionItemKind.Module,
+        "class": lsp.CompletionItemKind.Class,
+        "instance": lsp.CompletionItemKind.Variable,
+        "function": lsp.CompletionItemKind.Function,
+        "method": lsp.CompletionItemKind.Method,
+        "constructor": lsp.CompletionItemKind.Constructor,
+        "field": lsp.CompletionItemKind.Field,
+        "variable": lsp.CompletionItemKind.Variable,
+        "param": lsp.CompletionItemKind.Variable,
+        "property": lsp.CompletionItemKind.Property,
+        "unit": lsp.CompletionItemKind.Unit,
+        "value": lsp.CompletionItemKind.Value,
+        "enum": lsp.CompletionItemKind.Enum,
+        "keyword": lsp.CompletionItemKind.Keyword,
+        "snippet": lsp.CompletionItemKind.Snippet,
+        "color": lsp.CompletionItemKind.Color,
+        "file": lsp.CompletionItemKind.File,
+        "reference": lsp.CompletionItemKind.Reference,
+        "folder": lsp.CompletionItemKind.Folder,
+        "enum_member": lsp.CompletionItemKind.EnumMember,
+        "constant": lsp.CompletionItemKind.Constant,
+        "struct": lsp.CompletionItemKind.Struct,
+        "event": lsp.CompletionItemKind.Event,
+        "operator": lsp.CompletionItemKind.Operator,
+        "type_parameter": lsp.CompletionItemKind.TypeParameter,
+        "statement": lsp.CompletionItemKind.Text,
+        "text": lsp.CompletionItemKind.Text,
+    }
+
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
     )
+    completions = script.complete(
+        line=params.position.line + 1,
+        column=params.position.character,
+    )
+    return [
+        lsp.CompletionItem(
+            label=comp.name,
+            kind=COMPLETION_TYPE.get(
+                comp.type.lower(),
+                lsp.CompletionItemKind.Text
+            ),
+            detail=comp.description,
+            documentation=comp.docstring()
+        )
+        for comp in completions
+    ]
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DEFINITION)
-def definition(server: LanguageServer, params: lsp.TextDocumentPositionParams):
+async def definition(server: PyLLSPServer, params: lsp.TextDocumentPositionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
     code = doc.source
     line = params.position.line + 1
@@ -112,117 +166,198 @@ def definition(server: LanguageServer, params: lsp.TextDocumentPositionParams):
 
 
 @server.feature(lsp.TEXT_DOCUMENT_IMPLEMENTATION)
-def implementation(server: LanguageServer, params: lsp.TextDocumentPositionParams):
+async def implementation(server: PyLLSPServer, params: lsp.TextDocumentPositionParams):
     server.window_show_message(lsp.LogMessageParams(message="implementation", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DECLARATION)
-def declaration(server: LanguageServer, params: lsp.TextDocumentPositionParams):
+async def declaration(server: PyLLSPServer, params: lsp.TextDocumentPositionParams):
     server.window_show_message(lsp.LogMessageParams(message="declaration", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_TYPE_DEFINITION)
-def type_definition(server: LanguageServer, params: lsp.TextDocumentPositionParams):
+async def type_definition(server: PyLLSPServer, params: lsp.TextDocumentPositionParams):
     server.window_show_message(lsp.LogMessageParams(message="type definition", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_REFERENCES)
-def references(server: LanguageServer, params: lsp.ReferenceParams):
+async def references(server: PyLLSPServer, params: lsp.ReferenceParams):
     server.window_show_message(lsp.LogMessageParams(message="references", type=lsp.MessageType.Info))
 
 
-@server.feature(lsp.TEXT_DOCUMENT_SIGNATURE_HELP)
-def signature_help(server: LanguageServer, params: lsp.SignatureHelpParams):
-    server.window_show_message(lsp.LogMessageParams(message="signature help", type=lsp.MessageType.Info))
+@server.feature(
+    lsp.TEXT_DOCUMENT_SIGNATURE_HELP,
+    lsp.SignatureHelpOptions(trigger_characters=["(", "," ])
+)
+async def signature_help(server: PyLLSPServer, params: lsp.SignatureHelpParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
+    )
+    signatures = script.get_signatures(
+        line=params.position.line + 1,
+        column=params.position.character,
+    )
+
+    if not signatures:
+        return None
+
+    return lsp.SignatureHelp(
+        signatures=[
+            lsp.SignatureInformation(
+                label=s.to_string(),
+                documentation=s.docstring(),
+                parameters=[
+                    lsp.ParameterInformation(label=p.name, documentation=p.description)
+                    for p in s.params
+                ],
+            )
+            for s in signatures
+        ],
+        active_signature=0,
+        active_parameter=signatures[0].index or 0,
+    )
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
-def document_symbol(server: LanguageServer, params: lsp.DocumentSymbolParams):
+async def document_symbol(server: PyLLSPServer, params: lsp.DocumentSymbolParams):
     server.window_show_message(lsp.LogMessageParams(message="document symbol", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_RENAME)
-def rename(server: LanguageServer, params: lsp.RenameParams):
+async def rename(server: PyLLSPServer, params: lsp.RenameParams):
     server.window_show_message(lsp.LogMessageParams(message="rename", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_FORMATTING)
-def formatting(server: LanguageServer, params: lsp.DocumentFormattingParams):
+async def formatting(server: PyLLSPServer, params: lsp.DocumentFormattingParams):
     server.window_show_message(lsp.LogMessageParams(message="formatting", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_CODE_ACTION)
-def code_action(server: LanguageServer, params: lsp.CodeActionParams):
+async def code_action(server: PyLLSPServer, params: lsp.CodeActionParams):
     server.window_show_message(lsp.LogMessageParams(message="code action", type=lsp.MessageType.Info))
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
+    )
+    actions = []
+
+    server.window_show_message(lsp.LogMessageParams(message=f"{params.context.diagnostics}", type=lsp.MessageType.Info))
+    for diag in params.context.diagnostics:
+        if "undefined" not in diag.message.lower():
+            continue
+
+        line_text = source.splitlines()[diag.range.start.line]
+        name = line_text[diag.range.start.character:].split()[0]
+
+        actions.extend(actions.suggest_import(name, script))
+
+    return actions
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
-def did_open(server: LanguageServer, params: lsp.DidOpenTextDocumentParams):
-    project = jedi.get_default_project()
-    server.window_show_message(lsp.LogMessageParams(message=f"{project}", type=lsp.MessageType.Info))
+async def did_open(server: PyLLSPServer, params: lsp.DidOpenTextDocumentParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
 
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
+    )
+
+    await notifier.notify(doc.uri, script, [
+        diagnosis.syntax_errors,
+        diagnosis.undefined_names,
+    ])
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CHANGE)
-def did_change(server: LanguageServer, params: lsp.DidChangeTextDocumentParams):
-    server.window_show_message(lsp.LogMessageParams(message="did change", type=lsp.MessageType.Info))
+async def did_change(server: PyLLSPServer, params: lsp.DidChangeTextDocumentParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
+    )
+
+    await notifier.notify(doc.uri, script, [
+        diagnosis.syntax_errors,
+        diagnosis.undefined_names,
+    ])
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
-def did_save(server: LanguageServer, params: lsp.DidSaveTextDocumentParams):
-    server.window_show_message(lsp.LogMessageParams(message="did save", type=lsp.MessageType.Info))
+async def did_save(server: PyLLSPServer, params: lsp.DidSaveTextDocumentParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    script = jedi.Script(
+        code=doc.source,
+        path=doc.path,
+        project=server.project,
+    )
+
+    await notifier.notify(doc.uri, script, [
+        diagnosis.syntax_errors,
+        diagnosis.undefined_names,
+    ])
 
 
 @server.feature(lsp.TEXT_DOCUMENT_DID_CLOSE)
-def did_close(server: LanguageServer, params: lsp.DidCloseTextDocumentParams):
+async def did_close(server: PyLLSPServer, params: lsp.DidCloseTextDocumentParams):
     server.window_show_message(lsp.LogMessageParams(message="did close", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL)
-def semantic_tokens_full(server: LanguageServer, params: lsp.SemanticTokensParams):
+async def semantic_tokens_full(server: PyLLSPServer, params: lsp.SemanticTokensParams):
     server.window_show_message(lsp.LogMessageParams(message="semantic tokens full", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_CODE_LENS)
-def code_lens(server: LanguageServer, params: lsp.CodeLensParams):
+async def code_lens(server: PyLLSPServer, params: lsp.CodeLensParams):
     server.window_show_message(lsp.LogMessageParams(message="code lens", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_INLAY_HINT)
-def inlay_hint(server: LanguageServer, params: lsp.InlayHintParams):
+async def inlay_hint(server: PyLLSPServer, params: lsp.InlayHintParams):
     server.window_show_message(lsp.LogMessageParams(message="inlay hint", type=lsp.MessageType.Info))
 
 
-@server.feature(types.INLAY_HINT_RESOLVE)
-def inlay_hint_resolve(hint: types.InlayHint):
+@server.feature(lsp.INLAY_HINT_RESOLVE)
+async def inlay_hint_resolve(hint: lsp.InlayHint):
     server.window_show_message(lsp.LogMessageParams(message="inlay hint resolve", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WORKSPACE_SYMBOL)
-def workspace_symbol(server: LanguageServer, params: lsp.WorkspaceSymbolParams):
+async def workspace_symbol(server: PyLLSPServer, params: lsp.WorkspaceSymbolParams):
     server.window_show_message(lsp.LogMessageParams(message="workspace symbol", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WORKSPACE_DID_CHANGE_CONFIGURATION)
-def did_change_configuration(server: LanguageServer, params: lsp.DidChangeConfigurationParams):
+async def did_change_configuration(server: PyLLSPServer, params: lsp.DidChangeConfigurationParams):
     server.window_show_message(lsp.LogMessageParams(message="did change configuration", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WORKSPACE_DID_CHANGE_WATCHED_FILES)
-def did_change_watched_files(server: LanguageServer, params: lsp.DidChangeWatchedFilesParams):
+async def did_change_watched_files(server: PyLLSPServer, params: lsp.DidChangeWatchedFilesParams):
     server.window_show_message(lsp.LogMessageParams(message="did change watched files", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.TEXT_DOCUMENT_PREPARE_RENAME)
-def prepare_rename(server: LanguageServer, params: lsp.PrepareRenameParams):
+async def prepare_rename(server: PyLLSPServer, params: lsp.PrepareRenameParams):
     server.window_show_message(lsp.LogMessageParams(message="prepare rename", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WINDOW_SHOW_MESSAGE_REQUEST)
-def show_message_request(server: LanguageServer, params: lsp.ShowMessageRequestParams):
+async def show_message_request(server: PyLLSPServer, params: lsp.ShowMessageRequestParams):
     server.window_show_message(lsp.LogMessageParams(message="show message request", type=lsp.MessageType.Info))
 
 
 @server.feature(lsp.WINDOW_LOG_MESSAGE)
-def log_message(server: LanguageServer, params: lsp.LogMessageParams):
+async def log_message(server: PyLLSPServer, params: lsp.LogMessageParams):
     server.window_show_message(lsp.LogMessageParams(message="log message", type=lsp.MessageType.Info))
