@@ -13,9 +13,10 @@ requires-python = ">=3.9,<3.13"
 packages = [ { include = "pyllsp", from = "." } ]
 
 [tool.poetry.dependencies]
-pygls = ">=2.0.0a1"
+pygls = ">=2.0.0a3"
 importlib-metadata = "^8.6.1"
 jedi = "^0.19.2"
+trio = "^0.30.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
